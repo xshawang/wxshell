@@ -14,7 +14,7 @@ Xshell 类终端客户端的 Node.js/Electron 实现。设计依据见 `../Docum
 | 凭据 | scrypt KEK + AES-256-GCM + 每条目独立 DEK 的保险库 | 单元测试 |
 | 终端 | xterm.js 6 + WebGL（失败回退 DOM）+ 宽字符 + 10 万行回滚 + 搜索 + 8 项 addon | Electron 冒烟验证 |
 | 背压 | 高低水位 + ack 消费回报，`cat` 大文件不会撑爆内存 | 集成测试（真实暂停/恢复） |
-| 应用外壳 | Electron 主进程 / preload 白名单 / 渲染进程标签页 / 左侧连接树（文件夹 + 连接）/ 文件菜单 | Electron 冒烟验证（18 项） |
+| 应用外壳 | Electron 主进程 / preload 白名单 / 渲染进程标签页 / 左侧连接树（文件夹 + 连接）/ 文件菜单 | Electron 冒烟验证（19 项） |
 
 尚未实现（对应方案的后续里程碑）：SFTP 面板与拖拽传输（M3 起）、ZMODEM/trzsz 传输状态机（只做了魔数嗅探）、串口、触发器与 JS 沙箱脚本、日志回放的 UI、多窗口/平铺、主题市场、打包签名与自动更新、E2E（Playwright）。
 
@@ -25,7 +25,7 @@ npm install --ignore-scripts      # node-pty 用自带预编译产物，不需�
 npx electron --version            # 需要 Electron 44.5.1 二进制（见"本机注意事项"）
 
 npm run typecheck                 # tsc --noEmit，包含 tests/
-npm test                          # vitest run：236 个用例（单元 + 集成）
+npm test                          # vitest run：240 个用例（单元 + 集成）
 npm run build                     # 主进程/preload (tsc) + 渲染进程 (esbuild)
 npm run smoke                     # 真实 Electron 跑一遍主进程+preload+渲染进程+PTY 链路
 npm start                         # 构建并启动应用
@@ -63,6 +63,11 @@ config/
 口令输入框留空表示"用文件里已保存的那条"，不会把它清掉。
 文件的安全性依赖操作系统对该目录的权限，别把配置目录放到共享位置。
 
+公钥认证用「浏览…」挑私钥文件（只暴露"选私钥"这一个专用对话框，不给渲染进程通用文件选择能力），
+私钥路径存进连接配置的 `ssh.privateKeyPath`。**加密私钥的口令（passphrase）与登录口令同样处理**：
+存在同一份配置的 `secrets` 段，键为 `session:<id>:ssh-passphrase`，与登录口令的
+`session:<id>:ssh-password` 互不覆盖；输入框留空表示沿用文件里已保存的那条。
+
 ## 打包
 
 `npm run dist` 产出 `release/node-xshell-0.1.0-portable.exe`（约 98MB，单文件、不写注册表、双击即运行）。
@@ -84,7 +89,7 @@ src/renderer/    xterm.js 界面（esbuild 打成浏览器 bundle）
 src/shared/      三端共享的 IPC 类型契约
 tests/unit/      单元测试
 tests/integration/ 集成测试（真实 socket / 真实 PTY / 进程内 sshd 夹具）
-scripts/smoke.js Electron 冒烟验证（18 项）
+scripts/smoke.js Electron 冒烟验证（19 项）
 config/          运行期配置：开发态在项目根，打包后与 exe 同级
 ```
 
@@ -93,6 +98,7 @@ config/          运行期配置：开发态在项目根，打包后与 exe 同�
 - 渲染进程：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`、禁用 `webview`、CSP 只允许本地脚本与样式；preload 只暴露白名单方法，不暴露 `ipcRenderer` 本身。
 - 口令**明文保存在连接配置文件里**（`config/sessions/*.json` 的 `secrets` 段，见"连接与配置"），不打进日志与错误堆栈；渲染进程对口令只写不读——已保存的口令永远不回传到窗口，输入框留空即沿用文件里那条。
 - 主机指纹首次连接 TOFU 需显式确认；指纹变更默认阻断，只有显式选择"替换"才放行，并写审计。
+- 主机密钥确认走应用窗口内的对话框（仅本次信任 / 信任并保存 / 拒绝；指纹不符时按钮变为"替换并保存"），不用原生模态框——原生模态框被挡在窗口后面会把渲染进程一起卡住。
 - 不包含任何 NetSarang 的二进制、资源或图标。
 
 ## 本机注意事项（实测，非推测）

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import {
@@ -8,6 +8,7 @@ import {
   SessionStore,
   configPaths,
   resolveConfigDir,
+  sessionPassphraseRef,
   sessionSecretRef,
   type ConfigPaths,
   type HostKeyInfo,
@@ -98,6 +99,11 @@ function toProfile(message: OpenSessionMessage): SessionProfile {
       else transientSecrets.delete(ref);
     } else if (method === 'publickey') {
       ssh.privateKeyPath = message.privateKeyPath ?? '';
+      // 私钥口令与登录口令同一套语义：这次没输入就沿用会话文件里已保存的那条
+      const pref = sessionPassphraseRef(message.id);
+      ssh.passphraseRef = pref;
+      if (message.passphrase) transientSecrets.set(pref, message.passphrase);
+      else transientSecrets.delete(pref);
     }
     profile.ssh = ssh;
     profile.host = message.host;
@@ -191,6 +197,24 @@ function registerIpc(sessionStore: SessionStore): void {
     sessionStore.deleteFolder(id);
   });
 
+  // 只暴露"选私钥"这一件事，不做通用文件选择器：渲染进程拿不到任意路径的读取能力
+  ipcMain.handle('dialog:pick-private-key', async (event) => {
+    const options: Electron.OpenDialogOptions = {
+      title: '选择私钥文件',
+      properties: ['openFile'],
+      filters: [
+        { name: '私钥文件', extensions: ['pem', 'key', 'ppk'] },
+        // 私钥常常没有扩展名（id_rsa / id_ed25519），必须留"所有文件"
+        { name: '所有文件', extensions: ['*'] },
+      ],
+    };
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
   ipcMain.handle('session:open', (_event, message: OpenSessionMessage) => openSession(message));
 
   ipcMain.on('session:write', (_event, id: string, data: Uint8Array) => {
@@ -234,6 +258,7 @@ function wireManager(instance: SessionManager, contents: WebContents): void {
     activeSessions.delete(id);
     // 会话结束后本次输入的口令没有留着的必要
     transientSecrets.delete(sessionSecretRef(id));
+    transientSecrets.delete(sessionPassphraseRef(id));
     send('session:exit', { id, reason: info.reason, code: info.code });
   });
 

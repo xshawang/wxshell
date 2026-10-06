@@ -54,7 +54,13 @@
             </select>
           </label>
           <label class="row-secret">口令 <input id="f-password" type="password" autocomplete="off" /></label>
-          <label class="row-key">私钥路径 <input id="f-key" type="text" placeholder="C:\\Users\\me\\.ssh\\id_ed25519" /></label>
+          <label class="row-key">私钥路径
+            <span class="field-row">
+              <input id="f-key" type="text" placeholder="C:\\Users\\me\\.ssh\\id_ed25519" />
+              <button type="button" id="btn-pick-key">浏览…</button>
+            </span>
+          </label>
+          <label class="row-key">私钥口令 <input id="f-passphrase" type="password" autocomplete="off" placeholder="私钥未加密则留空" /></label>
           <label class="row-local">Shell 路径 <input id="f-shell" type="text" placeholder="留空自动探测（PowerShell / cmd）" /></label>
           <label class="row-save"><input id="f-save" type="checkbox" /> 保存到左侧会话列表</label>
           <label class="row-save"><input id="f-save-secret" type="checkbox" checked /> 口令写入会话文件（明文保存）</label>
@@ -76,6 +82,19 @@
           </div>
           <p class="hint" id="folder-hint"></p>
         </form>
+      </section>
+
+      <section id="hostkey-dialog" hidden>
+        <div id="hostkey-body">
+          <h2 id="hostkey-title">首次连接该主机</h2>
+          <p class="hint" id="hostkey-text"></p>
+          <pre id="hostkey-details"></pre>
+          <div class="dialog-actions">
+            <button type="button" id="btn-hostkey-once">仅本次信任</button>
+            <button type="button" id="btn-hostkey-save">信任并保存</button>
+            <button type="button" id="btn-hostkey-reject">拒绝</button>
+          </div>
+        </div>
       </section>
     </div>
     <script src="index.js"></script>

@@ -39,6 +39,8 @@ export interface OpenSessionMessage {
   /** 明文口令。是否落盘由渲染进程的"保存会话/保存口令"选择决定，见 profiles:save */
   password?: string;
   privateKeyPath?: string;
+  /** 私钥口令（passphrase），语义同 password：留空即沿用会话文件里已保存的那条 */
+  passphrase?: string;
   legacyAlgorithms?: boolean;
   /** local：显式指定 shell 可执行文件；留空则按候选列表自动探测 */
   shell?: string;
@@ -82,6 +84,8 @@ export interface XshellApi {
   deleteProfile(id: string): Promise<void>;
   createFolder(name: string, parentId: string | null): Promise<SessionFolder>;
   deleteFolder(id: string): Promise<void>;
+  /** 打开系统文件对话框选私钥，返回绝对路径；用户取消返回 null */
+  pickPrivateKeyFile(): Promise<string | null>;
 
   openSession(message: OpenSessionMessage): Promise<void>;
   /** 终端输入（键盘、粘贴） */

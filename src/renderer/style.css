@@ -223,6 +223,7 @@ main {
 /* ---- 对话框（新建连接 / 新建文件夹共用同一套外观） ---- */
 
 #dialog,
+#hostkey-dialog,
 #folder-dialog {
   position: fixed;
   inset: 0;
@@ -233,11 +234,13 @@ main {
 }
 
 #dialog[hidden],
+#hostkey-dialog[hidden],
 #folder-dialog[hidden] {
   display: none;
 }
 
 #session-form,
+#hostkey-body,
 #folder-form {
   width: 420px;
   max-height: 90vh;
@@ -253,9 +256,23 @@ main {
 }
 
 #session-form h2,
+#hostkey-body h2,
 #folder-form h2 {
   margin: 0 0 4px;
   font-size: 15px;
+}
+
+#hostkey-details {
+  margin: 0;
+  padding: 8px 10px;
+  background: #0e1015;
+  border: 1px solid #313a4c;
+  border-radius: 4px;
+  color: #d7dae0;
+  font-family: inherit;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 #session-form label,
@@ -285,6 +302,17 @@ main {
 
 #session-form label[hidden] {
   display: none;
+}
+
+#session-form .field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#session-form .field-row input {
+  flex: 1;
+  min-width: 0;
 }
 
 .dialog-actions {

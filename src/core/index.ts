@@ -25,6 +25,7 @@ export {
 export { KnownHostsStore, parseHostToken, type HostKeyVerdict, type KnownHostEntry } from './store/KnownHostsStore';
 export {
   SessionStore,
+  sessionPassphraseRef,
   sessionSecretRef,
   type SessionProfile,
   type SessionProfileInput,

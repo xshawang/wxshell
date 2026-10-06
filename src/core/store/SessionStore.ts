@@ -71,6 +71,14 @@ export function sessionSecretRef(id: string): string {
   return `session:${id}:ssh-password`;
 }
 
+/**
+ * 私钥口令（passphrase）独立于登录口令：同一个会话可能两者都有，
+ * 合用一个键会互相覆盖。
+ */
+export function sessionPassphraseRef(id: string): string {
+  return `session:${id}:ssh-passphrase`;
+}
+
 export type SessionProfileInput = Partial<Omit<SessionProfile, 'createdAt' | 'updatedAt'>> & {
   /** 传入已有 id 表示更新，省略表示新建 */
   id?: string;
@@ -81,6 +89,8 @@ export type SessionProfileInput = Partial<Omit<SessionProfile, 'createdAt' | 'up
    * 不传表示保持文件里已有的口令不动；传空串表示清掉。
    */
   password?: string;
+  /** 私钥口令明文，语义同 password */
+  passphrase?: string;
 };
 
 /**
@@ -127,7 +137,7 @@ export class SessionStore {
     const existing = input.id ? this.getSession(input.id) : null;
     const id = input.id ?? randomUUID();
 
-    const { password, ...fields } = input;
+    const { password, passphrase, ...fields } = input;
     const merged: SessionProfile = {
       parentId: null,
       ...existing,
@@ -144,17 +154,18 @@ export class SessionStore {
     if (merged.ssh && (merged.ssh.method === 'password' || merged.ssh.method === 'keyboard-interactive')) {
       merged.ssh = { ...merged.ssh, secretRef: sessionSecretRef(id) };
     }
+    if (merged.ssh?.method === 'publickey') {
+      merged.ssh = { ...merged.ssh, passphraseRef: sessionPassphraseRef(id) };
+    }
     this.validate(merged);
 
-    const secretRef = merged.ssh?.secretRef;
-    if (password !== undefined && secretRef) this.secrets.set(secretRef, password);
-
-    const persisted: Record<string, string> = {};
-    const value = secretRef ? this.secrets.get(secretRef) : undefined;
-    if (secretRef && value !== undefined) persisted[secretRef] = value;
+    if (password !== undefined && merged.ssh?.secretRef) this.secrets.set(merged.ssh.secretRef, password);
+    if (passphrase !== undefined && merged.ssh?.passphraseRef) {
+      this.secrets.set(merged.ssh.passphraseRef, passphrase);
+    }
 
     this.sessions.set(id, merged);
-    this.writeSessionFile(merged, persisted);
+    this.writeSessionFile(merged, this.persistedSecrets(merged));
     return merged;
   }
 
@@ -162,8 +173,9 @@ export class SessionStore {
     const profile = this.sessions.get(id);
     if (!profile) return false;
     this.sessions.delete(id);
-    const secretRef = profile.ssh?.secretRef;
-    if (secretRef) this.secrets.delete(secretRef);
+    for (const ref of [profile.ssh?.secretRef, profile.ssh?.passphraseRef]) {
+      if (ref) this.secrets.delete(ref);
+    }
     rmSync(this.sessionFile(id), { force: true });
     return true;
   }
@@ -266,10 +278,14 @@ export class SessionStore {
   }
 
   private persistedSecrets(profile: SessionProfile): Record<string, string> {
-    const ref = profile.ssh?.secretRef;
-    if (!ref) return {};
-    const value = this.secrets.get(ref);
-    return value === undefined ? {} : { [ref]: value };
+    // 同一个会话可能有两个 secret：登录口令与私钥口令，都要写进这一份文件
+    const out: Record<string, string> = {};
+    for (const ref of [profile.ssh?.secretRef, profile.ssh?.passphraseRef]) {
+      if (!ref) continue;
+      const value = this.secrets.get(ref);
+      if (value !== undefined) out[ref] = value;
+    }
+    return out;
   }
 
   private writeSessionFile(profile: SessionProfile, secrets: Record<string, string>): void {

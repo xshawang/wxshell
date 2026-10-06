@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SessionStore, sessionSecretRef } from '../../src/core/store/SessionStore';
+import { SessionStore, sessionPassphraseRef, sessionSecretRef } from '../../src/core/store/SessionStore';
 import { makeTmpDir, removeTmpDir } from '../helpers/tmp';
 
 let root: string;
@@ -21,6 +21,56 @@ const sshInput = {
   host: '10.0.0.11',
   ssh: { method: 'password' as const, username: 'deploy' },
 };
+
+describe('SessionStore - 私钥口令', () => {
+  const keyInput = {
+    name: 'key-01',
+    kind: 'ssh' as const,
+    host: '10.0.0.12',
+    ssh: {
+      method: 'publickey' as const,
+      username: 'deploy',
+      privateKeyPath: 'C:\\keys\\id_ed25519',
+    },
+  };
+
+  it('passphraseRef 由 id 推导，且与登录口令互不覆盖', () => {
+    const store = new SessionStore(root);
+    const s = store.upsertSession({ ...keyInput, passphrase: 'pp-secret' });
+    expect(s.ssh?.passphraseRef).toBe(sessionPassphraseRef(s.id));
+    expect(s.ssh?.secretRef).toBeUndefined();
+    expect(store.getSecret(sessionPassphraseRef(s.id))).toBe('pp-secret');
+  });
+
+  it('私钥口令与连接配置写进同一个会话文件，重载后仍能取回', () => {
+    const store = new SessionStore(root);
+    const s = store.upsertSession({ ...keyInput, passphrase: 'pp-secret' });
+
+    const raw = JSON.parse(readFileSync(join(sessionsDir(), `${s.id}.json`), 'utf8'));
+    expect(raw.profile.ssh.method).toBe('publickey');
+    expect(raw.profile.ssh.privateKeyPath).toBe('C:\\keys\\id_ed25519');
+    expect(raw.secrets[sessionPassphraseRef(s.id)]).toBe('pp-secret');
+
+    const reloaded = new SessionStore(root);
+    expect(reloaded.getSecret(sessionPassphraseRef(s.id))).toBe('pp-secret');
+    expect(reloaded.getSession(s.id)?.ssh?.privateKeyPath).toBe('C:\\keys\\id_ed25519');
+  });
+
+  it('不传 passphrase 时保留文件里已存的那条', () => {
+    const store = new SessionStore(root);
+    const s = store.upsertSession({ ...keyInput, passphrase: 'pp-secret' });
+    store.upsertSession({ ...keyInput, id: s.id });
+    expect(new SessionStore(root).getSecret(sessionPassphraseRef(s.id))).toBe('pp-secret');
+  });
+
+  it('删除会话时连私钥口令一起清掉', () => {
+    const store = new SessionStore(root);
+    const s = store.upsertSession({ ...keyInput, passphrase: 'pp-secret' });
+    store.deleteSession(s.id);
+    expect(store.getSecret(sessionPassphraseRef(s.id))).toBeNull();
+    expect(sessionFiles()).toHaveLength(0);
+  });
+});
 
 describe('SessionStore - CRUD', () => {
   it('新建会话并分配默认端口', () => {

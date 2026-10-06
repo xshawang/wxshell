@@ -7,6 +7,8 @@ import '@xterm/xterm/css/xterm.css';
 import './style.css';
 
 import type {
+  HostKeyDecision,
+  HostKeyPromptPayload,
   OpenSessionMessage,
   SessionProfile,
   SessionProfileInput,
@@ -75,12 +77,14 @@ const fUser = el<HTMLInputElement>('f-user');
 const fAuth = el<HTMLSelectElement>('f-auth');
 const fPassword = el<HTMLInputElement>('f-password');
 const fKey = el<HTMLInputElement>('f-key');
+const fPassphrase = el<HTMLInputElement>('f-passphrase');
 const fShell = el<HTMLInputElement>('f-shell');
 const fSave = el<HTMLInputElement>('f-save');
 const fSaveSecret = el<HTMLInputElement>('f-save-secret');
 const formHint = el<HTMLParagraphElement>('form-hint');
 const fFolderName = el<HTMLInputElement>('f-folder-name');
 const folderHint = el<HTMLParagraphElement>('folder-hint');
+const hostKeyDialog = el<HTMLElement>('hostkey-dialog');
 
 function newId(): string {
   const uuid = globalThis.crypto?.randomUUID?.();
@@ -235,16 +239,43 @@ api.onError(({ id, message, code }) => {
   setStatus(`错误 ${code}：${message}`);
 });
 
-api.onHostKeyPrompt(({ requestId, info, verdict }) => {
-  const head =
-    verdict === 'mismatch'
-      ? '主机密钥已变更！可能遭到中间人攻击。'
-      : '首次连接该主机，请核对指纹。';
-  const ok = window.confirm(
-    `${head}\n\n主机：${info.host}:${info.port}\n算法：${info.keyType}\n指纹：${info.fingerprint}\n\n确定信任并记录该指纹？`,
-  );
-  void api.answerHostKey(requestId, ok ? 'accept-and-save' : 'reject');
-});
+/* ---------- 主机密钥确认 ---------- */
+
+/**
+ * 不用 window.confirm：它是模态阻塞的，对话框一旦被挡在窗口后面，
+ * 整个渲染进程会卡住 —— 从用户角度看就是"点了连接没反应"。
+ */
+let hostKeyRequestId: string | null = null;
+let hostKeyMismatch = false;
+
+function finishHostKey(decision: HostKeyDecision): void {
+  const requestId = hostKeyRequestId;
+  hostKeyRequestId = null;
+  hostKeyDialog.hidden = true;
+  if (requestId) void api.answerHostKey(requestId, decision);
+}
+
+function showHostKeyDialog({ requestId, info, verdict }: HostKeyPromptPayload): void {
+  hostKeyRequestId = requestId;
+  hostKeyMismatch = verdict === 'mismatch';
+  el('hostkey-title').textContent = hostKeyMismatch ? '主机密钥已变更！' : '首次连接该主机';
+  el('hostkey-text').textContent = hostKeyMismatch
+    ? '指纹与记录不一致，可能遭到中间人攻击。除非确认服务器确实换过密钥，否则请拒绝。'
+    : '请核对指纹后再决定是否信任并记录。';
+  el('hostkey-details').textContent =
+    `主机：${info.host}:${info.port}\n算法：${info.keyType}\n指纹：${info.fingerprint}`;
+  el('btn-hostkey-save').textContent = hostKeyMismatch ? '替换并保存' : '信任并保存';
+  hostKeyDialog.hidden = false;
+  el('btn-hostkey-once').focus();
+}
+
+el('btn-hostkey-once').addEventListener('click', () => finishHostKey('accept-once'));
+el('btn-hostkey-save').addEventListener('click', () =>
+  finishHostKey(hostKeyMismatch ? 'replace-and-save' : 'accept-and-save'),
+);
+el('btn-hostkey-reject').addEventListener('click', () => finishHostKey('reject'));
+
+api.onHostKeyPrompt(showHostKeyDialog);
 
 /** 菜单命令由主进程发过来：左栏是这里画的，所以怎么呈现由渲染进程决定 */
 api.onMenuCommand((command) => {
@@ -386,7 +417,9 @@ function syncFormRows(): void {
   });
   // "口令写入文件"只在确实要保存、且确实有口令可存的时候才有意义
   const secretRow = fSaveSecret.parentElement as HTMLElement | null;
-  if (secretRow) secretRow.hidden = !(ssh && passwordAuth && fSave.checked);
+  if (secretRow) {
+    secretRow.hidden = !(ssh && (passwordAuth || fAuth.value === 'publickey') && fSave.checked);
+  }
 }
 
 function showDialog(profile?: SessionProfile, parentId: string | null = null): void {
@@ -411,7 +444,7 @@ function showDialog(profile?: SessionProfile, parentId: string | null = null): v
 
   el('dialog-title').textContent = profile ? `连接 ${profile.name}` : '新建连接';
   formHint.textContent =
-    profile?.ssh?.secretRef && profile.ssh.method !== 'publickey' && profile.ssh.method !== 'agent'
+    profile?.ssh?.secretRef || profile?.ssh?.passphraseRef
       ? '口令已保存在会话文件中：留空即用已保存的口令。'
       : '口令默认与会话配置写进同一个文件。';
   dialog.hidden = false;
@@ -429,11 +462,25 @@ fSave.addEventListener('change', syncFormRows);
 el('btn-cancel').addEventListener('click', hideDialog);
 el('btn-local').addEventListener('click', () => showDialog());
 
-form.addEventListener('submit', async (event) => {
+el('btn-pick-key').addEventListener('click', async () => {
+  const picked = await api.pickPrivateKeyFile();
+  if (picked) fKey.value = picked;
+});
+
+form.addEventListener('submit', (event) => {
   event.preventDefault();
+  // 失败必须显示出来：静默抛出会表现成"点了连接没反应"
+  void saveAndConnect().catch((err: Error) => {
+    formHint.textContent = `操作失败：${err.message}`;
+    setStatus(`操作失败：${err.message}`);
+  });
+});
+
+async function saveAndConnect(): Promise<void> {
   const kind = fKind.value as OpenSessionMessage['kind'];
   const portText = fPort.value.trim();
   const typedPassword = fPassword.value;
+  const typedPassphrase = fPassphrase.value;
   const name = fName.value.trim() || `${fHost.value.trim() || kind}`;
 
   const message: OpenSessionMessage = {
@@ -462,6 +509,12 @@ form.addEventListener('submit', async (event) => {
       if (typedPassword !== '') message.password = typedPassword;
     } else if (message.authMethod === 'publickey') {
       message.privateKeyPath = fKey.value.trim();
+      if (!message.privateKeyPath) {
+        formHint.textContent = '公钥认证需要填写或选择私钥文件。';
+        return;
+      }
+      // 留空表示沿用会话文件里已保存的私钥口令（没有则视为私钥未加密）
+      if (typedPassphrase !== '') message.passphrase = typedPassphrase;
     }
   } else if (kind === 'local' && fShell.value.trim()) {
     message.shell = fShell.value.trim();
@@ -476,11 +529,18 @@ form.addEventListener('submit', async (event) => {
       parentId: newParentId,
       ssh:
         kind === 'ssh'
-          ? { method: message.authMethod ?? 'password', username: message.username ?? '' }
+          ? {
+              method: message.authMethod ?? 'password',
+              username: message.username ?? '',
+              // 公钥认证必须把私钥路径一并存下来：SessionStore.validate 会校验它，
+              // 漏掉的话保存这一步就抛错，后面的连接根本不会发起
+              privateKeyPath: message.privateKeyPath,
+            }
           : undefined,
     };
     if (editingProfile) input.id = editingProfile.id;
     if (kind === 'ssh' && fSaveSecret.checked && typedPassword !== '') input.password = typedPassword;
+    if (kind === 'ssh' && fSaveSecret.checked && typedPassphrase !== '') input.passphrase = typedPassphrase;
 
     const saved = await api.saveProfile(input);
     message.id = saved.id;
@@ -489,7 +549,7 @@ form.addEventListener('submit', async (event) => {
 
   hideDialog();
   await openSession(message);
-});
+}
 
 /* ---------- 搜索 ---------- */
 

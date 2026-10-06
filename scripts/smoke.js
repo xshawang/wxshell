@@ -211,6 +211,44 @@ async function run() {
   );
   check('保存的连接出现在左侧列表', savedShown >= 1, `count=${savedShown}`);
 
+  // 7b) 公钥认证保存：私钥路径必须跟着落盘。
+  //     回归用例 —— 漏掉 privateKeyPath 时 profiles:save 会抛
+  //     "公钥认证必须指定私钥路径"，整个提交中断，表现为"点连接没反应"。
+  clickMenuItem('新建连接…');
+  await wc.executeJavaScript(`
+    (() => {
+      const kind = document.getElementById('f-kind');
+      kind.value = 'ssh';
+      kind.dispatchEvent(new Event('change'));
+      document.getElementById('f-name').value = 'smoke-key';
+      document.getElementById('f-host').value = '127.0.0.1';
+      document.getElementById('f-port').value = '1';
+      document.getElementById('f-user').value = 'root';
+      const auth = document.getElementById('f-auth');
+      auth.value = 'publickey';
+      auth.dispatchEvent(new Event('change'));
+      document.getElementById('f-key').value = 'C:/keys/id_ed25519';
+      const save = document.getElementById('f-save');
+      save.checked = true;
+      save.dispatchEvent(new Event('change'));
+      document.getElementById('session-form').requestSubmit();
+      return true;
+    })()
+  `);
+
+  const keyFile = await waitFor(() => {
+    const dir = join(CONFIG_DIR, 'sessions');
+    const names = existsSync(dir) ? readdirSync(dir).filter((n) => n.endsWith('.json')) : [];
+    return names.map((n) => join(dir, n)).find((f) => readFileSync(f, 'utf8').includes('smoke-key')) ?? null;
+  }, 15000, '公钥会话配置文件');
+
+  const keyProfile = keyFile ? JSON.parse(readFileSync(keyFile, 'utf8')).profile : null;
+  check(
+    '公钥会话保存成功且私钥路径落盘',
+    keyProfile?.name === 'smoke-key' && keyProfile?.ssh?.privateKeyPath === 'C:/keys/id_ed25519',
+    `file=${keyFile ?? '-'} path=${keyProfile?.ssh?.privateKeyPath ?? '-'}`,
+  );
+
   // 8) 再打开这条已保存连接时，口令框留空即可复用文件里的口令（渲染进程只被告知"已保存"，拿不到明文）
   await wc.executeJavaScript(`document.querySelector('#profile-list .profile-open').click()`);
   const reuseHint = await wc.executeJavaScript('document.getElementById("form-hint").textContent');

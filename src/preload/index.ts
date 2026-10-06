@@ -32,6 +32,7 @@ const api: XshellApi = {
   createFolder: (name: string, parentId: string | null) =>
     ipcRenderer.invoke('folders:create', name, parentId),
   deleteFolder: (id: string) => ipcRenderer.invoke('folders:delete', id),
+  pickPrivateKeyFile: () => ipcRenderer.invoke('dialog:pick-private-key'),
 
   openSession: (message: OpenSessionMessage) => ipcRenderer.invoke('session:open', message),
   writeSession: (id: string, data: Uint8Array) => ipcRenderer.send('session:write', id, data),
