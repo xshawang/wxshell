@@ -343,7 +343,7 @@ async function refreshProfiles(): Promise<void> {
 
 function showFolderDialog(): void {
   fFolderName.value = '';
-  folderHint.textContent = '只保存在配置目录里，可以嵌套创建。';
+  folderHint.textContent = '只记在配置目录的 folders.json 里，不会在磁盘上新建真实目录。';
   folderDialog.hidden = false;
   fFolderName.focus();
 }
