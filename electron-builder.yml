@@ -1,0 +1,57 @@
+# electron-builder 配置（对应架构方案 §2 的打包选型）
+#
+# 目标形态：portable —— 单个 exe，双击即运行，不写注册表、不需要安装。
+# 需要单独装机的场景再切到 nsis（target: nsis 会额外产出安装包）。
+appId: com.nodexshell.desktop
+productName: node-xshell
+copyright: node-xshell
+
+directories:
+  output: release
+  buildResources: build
+
+# electron 二进制走 npmmirror，本机可达（GitHub releases 在本环境不可达）
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
+
+files:
+  - dist/**/*
+  - package.json
+  # 源码、测试、打包脚本不进包：包内只需要编译产物 + 生产依赖
+  - "!src/**"
+  - "!tests/**"
+  - "!scripts/**"
+  - "!release/**"
+  - "!dist/**/*.map"
+  - "!**/*.ts"
+  - "!tsconfig*.json"
+  - "!vitest.config.ts"
+  - "!README.md"
+  - "!.gitignore"
+  # node-pty 自带各平台 prebuild，只保留 win32-x64：其余平台 + 调试符号合计约 45MB
+  - "!**/node_modules/node-pty/prebuilds/darwin-*/**"
+  - "!**/node_modules/node-pty/prebuilds/win32-arm64/**"
+  - "!**/node_modules/node-pty/**/*.pdb"
+
+# node-pty 的 prebuilds 是 N-API 构建（ABI 稳定），Electron 可直接加载；
+# 不关掉的话 electron-builder 会按 Electron ABI 重编译并覆盖掉可用的 prebuild
+npmRebuild: false
+
+asar: true
+# 原生模块与配套可执行文件必须解包：asar 里的 .node / .dll / .exe 无法被 dlopen / CreateProcess
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-portable.${ext}
+  # 未签名：本地使用；对外分发前需要补签名，否则 SmartScreen 会拦
+  signAndEditExecutable: true
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+  # 便携版的解包目录名，避免多个实例互相覆盖
+  unpackDirName: node-xshell-${version}

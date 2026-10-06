@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <!-- 渲染进程不加载任何远端资源；只允许本地脚本与样式 -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+    />
+    <title>node-xshell</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <div class="sidebar-head">会话</div>
+        <ul id="profile-list"></ul>
+        <div class="sidebar-foot">
+          <button id="btn-local" type="button">本地终端</button>
+        </div>
+      </aside>
+
+      <main>
+        <div id="tabs"></div>
+        <div id="search-bar" hidden>
+          <input id="search-input" type="search" placeholder="搜索缓冲区（Enter 下一个 / Shift+Enter 上一个 / Esc 关闭）" />
+          <span id="search-hint"></span>
+        </div>
+        <div id="terminal-host"></div>
+        <footer id="status">就绪</footer>
+      </main>
+
+      <section id="dialog" hidden>
+        <form id="session-form">
+          <h2 id="dialog-title">新建会话</h2>
+          <label>协议
+            <select id="f-kind">
+              <option value="ssh">SSH</option>
+              <option value="telnet">Telnet</option>
+              <option value="rawtcp">裸 TCP</option>
+              <option value="local">本地 Shell</option>
+            </select>
+          </label>
+          <label>名称 <input id="f-name" type="text" placeholder="可留空" /></label>
+          <label class="row-ssh">主机 <input id="f-host" type="text" placeholder="10.0.0.1" /></label>
+          <label class="row-ssh">端口 <input id="f-port" type="number" min="1" max="65535" placeholder="22" /></label>
+          <label class="row-ssh">用户名 <input id="f-user" type="text" placeholder="root" /></label>
+          <label class="row-ssh">认证
+            <select id="f-auth">
+              <option value="password">口令</option>
+              <option value="keyboard-interactive">Keyboard-Interactive</option>
+              <option value="publickey">公钥</option>
+              <option value="agent">SSH Agent</option>
+            </select>
+          </label>
+          <label class="row-secret">口令 <input id="f-password" type="password" autocomplete="off" /></label>
+          <label class="row-key">私钥路径 <input id="f-key" type="text" placeholder="C:\\Users\\me\\.ssh\\id_ed25519" /></label>
+          <label class="row-local">Shell 路径 <input id="f-shell" type="text" placeholder="留空自动探测（PowerShell / cmd）" /></label>
+          <label class="row-save"><input id="f-save" type="checkbox" /> 保存到左侧会话列表</label>
+          <label class="row-save"><input id="f-save-secret" type="checkbox" checked /> 口令写入会话文件（明文保存）</label>
+          <div class="dialog-actions">
+            <button type="submit" id="btn-connect">连接</button>
+            <button type="button" id="btn-cancel">取消</button>
+          </div>
+          <p class="hint" id="form-hint"></p>
+        </form>
+      </section>
+
+      <section id="folder-dialog" hidden>
+        <form id="folder-form">
+          <h2>新建文件夹</h2>
+          <label>名称 <input id="f-folder-name" type="text" placeholder="例如：生产环境" /></label>
+          <div class="dialog-actions">
+            <button type="submit" id="btn-folder-ok">创建</button>
+            <button type="button" id="btn-folder-cancel">取消</button>
+          </div>
+          <p class="hint" id="folder-hint"></p>
+        </form>
+      </section>
+    </div>
+    <script src="index.js"></script>
+  </body>
+</html>

@@ -1,0 +1,306 @@
+/* 渲染进程样式：布局 + 主题。终端本身的配色由 xterm 的 theme 选项控制。 */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #12141a;
+  color: #d7dae0;
+  font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+/* ---- 侧栏 ---- */
+
+#sidebar {
+  width: 260px;
+  flex: 0 0 260px;
+  display: flex;
+  flex-direction: column;
+  background: #171a21;
+  border-right: 1px solid #262b36;
+}
+
+.sidebar-head {
+  padding: 10px 12px;
+  font-weight: 600;
+  color: #9fb3d1;
+  border-bottom: 1px solid #262b36;
+}
+
+#profile-list {
+  flex: 1;
+  overflow: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+#profile-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+#profile-list li.empty {
+  color: #6b7488;
+  padding: 8px;
+}
+
+#profile-list li.folder {
+  display: block;
+}
+
+.profile-open {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-del {
+  color: #d98b8b;
+}
+
+/* 目录：一行标题 + 缩进的子列表 */
+
+.folder-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  background: #1c212c;
+}
+
+.folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #9fb3d1;
+  font-weight: 600;
+}
+
+.folder-name::before {
+  content: "\25B8\00a0";
+  color: #6b7488;
+}
+
+.folder-add {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.folder-children {
+  list-style: none;
+  margin: 2px 0;
+  padding: 0 0 0 12px;
+  border-left: 1px solid #262b36;
+}
+
+.sidebar-foot {
+  padding: 8px;
+  border-top: 1px solid #262b36;
+}
+
+button {
+  background: #232936;
+  color: #d7dae0;
+  border: 1px solid #313a4c;
+  border-radius: 4px;
+  padding: 5px 9px;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover {
+  background: #2c3444;
+}
+
+/* ---- 主区 ---- */
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px 4px 0;
+  background: #171a21;
+  border-bottom: 1px solid #262b36;
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 4px 4px 0 0;
+  background: #1e2330;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab.active {
+  background: #12141a;
+  box-shadow: inset 0 -2px 0 #7ec8ff;
+}
+
+.tab button {
+  border: none;
+  background: transparent;
+  padding: 0 4px;
+  color: #8b95a9;
+}
+
+#search-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: #1a1f29;
+  border-bottom: 1px solid #262b36;
+}
+
+#search-input {
+  flex: 1;
+  background: #0e1015;
+  border: 1px solid #313a4c;
+  color: inherit;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font: inherit;
+}
+
+#search-hint {
+  color: #d98b8b;
+}
+
+#terminal-host {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+.term-panel {
+  position: absolute;
+  inset: 0;
+  display: none;
+  padding: 4px 0 0 6px;
+}
+
+.term-panel.active {
+  display: block;
+}
+
+#status {
+  padding: 4px 10px;
+  background: #171a21;
+  border-top: 1px solid #262b36;
+  color: #8b95a9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- 对话框（新建连接 / 新建文件夹共用同一套外观） ---- */
+
+#dialog,
+#folder-dialog {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#dialog[hidden],
+#folder-dialog[hidden] {
+  display: none;
+}
+
+#session-form,
+#folder-form {
+  width: 420px;
+  max-height: 90vh;
+  overflow: auto;
+  background: #1a1f29;
+  border: 1px solid #313a4c;
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+#session-form h2,
+#folder-form h2 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+#session-form label,
+#folder-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #9fb3d1;
+}
+
+#session-form label.row-save {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+#session-form input,
+#session-form select,
+#folder-form input {
+  background: #0e1015;
+  border: 1px solid #313a4c;
+  color: #d7dae0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+#session-form label[hidden] {
+  display: none;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+#btn-connect {
+  background: #1f4a7a;
+  border-color: #2b6ba8;
+}
+
+.hint {
+  margin: 0;
+  color: #6b7488;
+  min-height: 1.2em;
+}
